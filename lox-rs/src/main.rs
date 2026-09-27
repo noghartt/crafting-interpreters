@@ -1,5 +1,11 @@
 use std::env;
 
+mod error;
+mod lexer;
+mod runtime;
+
+use crate::runtime::Runtime;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let args = &args[1..];
@@ -26,6 +32,7 @@ fn run_prompt() {
 
         input.clear();
 
+        let runtime = Runtime::new();
         match io::stdin().read_line(&mut input) {
             Ok(0) => {
                 println!("\nExiting...");
@@ -37,7 +44,10 @@ fn run_prompt() {
                     println!("\nExiting...");
                 }
 
-                run(trimmed);
+                match runtime.run(trimmed.to_owned()) {
+                    Ok(result) => println!("{result:?}"),
+                    Err(e) => println!("Error: {e:?}"),
+                }
             }
             Err(err) => {
                 eprintln!("Error reading input: {err}");
@@ -52,10 +62,6 @@ fn run_file(path: &String) {
 
     let content = fs::read_to_string(path).expect("Should read the right file path");
 
-    run(&content);
-}
-
-fn run(input: &str) {
-    println!("Input: {input}");
-    todo!("To be executed...");
+    let runtime = Runtime::new();
+    let _ = runtime.run(content);
 }
