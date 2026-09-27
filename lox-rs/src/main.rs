@@ -32,7 +32,8 @@ fn run_prompt() {
 
         input.clear();
 
-        let runtime = Runtime::new();
+        // TODO: Improve how to manage path, see some way to approach it better.
+        let runtime = Runtime::new("".to_string());
         match io::stdin().read_line(&mut input) {
             Ok(0) => {
                 println!("\nExiting...");
@@ -62,6 +63,6 @@ fn run_file(path: &String) {
 
     let content = fs::read_to_string(path).expect("Should read the right file path");
 
-    let runtime = Runtime::new();
+    let runtime = Runtime::new(path.to_owned());
     let _ = runtime.run(content);
 }
