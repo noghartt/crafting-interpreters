@@ -2,7 +2,7 @@ mod token;
 
 pub use token::{Token, TokenType};
 
-use crate::{error::Error, lexer::TokenType::Print};
+use crate::error::Error;
 
 pub struct Lexer {
     path: String,
@@ -90,7 +90,7 @@ impl Lexer {
             '/' => {
                 if self.match_next('/') {
                     loop {
-                        if self.peek() == '\n' || self.is_at_end() {
+                        if self.peek() == Some('\n') || self.is_at_end() {
                             break;
                         }
 
@@ -123,9 +123,7 @@ impl Lexer {
     }
 
     fn advance(&mut self) -> Option<char> {
-        let Some(c) = self.peek() else {
-            return None;
-        };
+        let c = self.peek()?;
 
         self.current += 1;
 
@@ -147,5 +145,28 @@ impl Lexer {
 
     fn get_line_from_offset(&self, offset: usize) -> usize {
         self.source[..offset].iter().filter(|&&c| c == '\n').count() + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_parenthesis() {
+        let source = "( )";
+
+        let lexer = create_new_lexer(source);
+        let tokens = lexer.scan().unwrap();
+
+        assert_eq!(tokens.len(), 3);
+
+        assert_eq!(tokens[0].token, TokenType::LeftParen);
+        assert_eq!(tokens[1].token, TokenType::RightParen);
+        assert_eq!(tokens[2].token, TokenType::Eof);
+    }
+
+    fn create_new_lexer(source: &str) -> Lexer {
+        Lexer::new("".to_string(), source.to_string())
     }
 }

@@ -1,11 +1,13 @@
+#[derive(Debug)]
 pub struct TokenMetadata {
     /// Start and end position of a token.
     offset: (usize, usize),
 }
 
+#[derive(Debug)]
 pub struct Token {
-    token: TokenType,
-    metadata: TokenMetadata,
+    pub token: TokenType,
+    pub metadata: TokenMetadata,
 }
 
 impl Token {
@@ -17,6 +19,7 @@ impl Token {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
