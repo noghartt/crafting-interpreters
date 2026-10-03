@@ -101,9 +101,9 @@ impl Lexer {
                 TokenType::Slash
             }
             '"' => return self.lex_string(),
-            ' ' | '\r' | '\n' | '\t' => return Ok(None),
             c if is_digit(Some(c)) => return self.lex_number(),
             c if is_alpha(Some(c)) => return self.lex_identifier(),
+            ' ' | '\r' | '\n' | '\t' => return Ok(None),
             other => return Err(self.generate_error(format!("Unexpected token: {other}"))),
         };
 
@@ -152,10 +152,7 @@ impl Lexer {
         }
 
         let text = String::from_iter(&self.source[self.start..self.current]);
-        let Some(token_type) = is_keyword(&text) else {
-            let identifier = TokenType::Identifier(text);
-            return Ok(Some(Token::new(identifier, (self.start, self.current))));
-        };
+        let token_type = is_keyword(&text).unwrap_or(TokenType::Identifier(text));
 
         Ok(Some(Token::new(token_type, (self.start, self.current))))
     }
