@@ -91,7 +91,7 @@ impl Lexer {
                 if self.match_next('/') {
                     loop {
                         if self.peek() == Some('\n') || self.is_at_end() {
-                            break;
+                            return Ok(None);
                         }
 
                         self.advance();
@@ -212,6 +212,34 @@ mod tests {
             tokens[0].token,
             TokenType::String("Hello, world!".to_string())
         );
+        assert_eq!(tokens[1].token, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_comment() {
+        let source = r#"// Hi ("#;
+
+        let lexer = create_new_lexer(source);
+        let tokens = lexer.scan().unwrap();
+
+        assert_eq!(tokens.len(), 1);
+
+        assert_eq!(tokens[0].token, TokenType::Eof)
+    }
+
+    #[test]
+    fn test_comment_with_next_string() {
+        let source = r#"
+        // Hi :)
+        "Hello, world!"
+        "#;
+
+        let lexer = create_new_lexer(source);
+        let tokens = lexer.scan().unwrap();
+
+        assert_eq!(tokens.len(), 2);
+
+        assert_eq!(tokens[0].token, TokenType::String("Hello, world!".into()));
         assert_eq!(tokens[1].token, TokenType::Eof);
     }
 
