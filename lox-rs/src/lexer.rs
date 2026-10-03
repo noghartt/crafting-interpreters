@@ -98,6 +98,23 @@ impl Lexer {
                     }
                 }
 
+                if self.match_next('*') {
+                    loop {
+                        if self.is_at_end() {
+                            return Err(
+                                self.generate_error(String::from("Unterminated multiline comment"))
+                            );
+                        }
+
+                        if self.peek() == Some('*') && self.peek_next() == Some('/') {
+                            self.advance_nth(2);
+                            return Ok(None);
+                        }
+
+                        self.advance();
+                    }
+                }
+
                 TokenType::Slash
             }
             '"' => return self.lex_string(),
@@ -179,6 +196,18 @@ impl Lexer {
         self.current += 1;
 
         Some(c)
+    }
+
+    fn advance_nth(&mut self, step: usize) -> Option<char> {
+        let mut count = 0;
+        loop {
+            if count == step {
+                return self.peek();
+            }
+
+            count += 1;
+            self.advance();
+        }
     }
 
     fn match_next(&mut self, expected_char: char) -> bool {
@@ -336,6 +365,30 @@ mod tests {
         assert_eq!(tokens.len(), 2);
 
         assert_eq!(tokens[0].token, TokenType::Number(3.1415));
+        assert_eq!(tokens[1].token, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_multiline_comment() {
+        let source = r#"
+        /* This is a multiline comment!
+         * Cool, right?
+         * :)
+         **/
+        "Hello, world!"
+        "#;
+
+        let lexer = create_new_lexer(source);
+        let tokens = lexer.scan().unwrap();
+
+        println!("{tokens:?}");
+
+        assert_eq!(tokens.len(), 2);
+
+        assert_eq!(
+            tokens[0].token,
+            TokenType::String("Hello, world!".to_string())
+        );
         assert_eq!(tokens[1].token, TokenType::Eof);
     }
 
