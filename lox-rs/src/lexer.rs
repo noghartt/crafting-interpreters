@@ -147,7 +147,7 @@ impl Lexer {
     }
 
     fn lex_identifier(&mut self) -> Result<Option<Token>, Error> {
-        while self.peek().is_some_and(|c| c.is_alphanumeric()) {
+        while self.peek().is_some_and(|c| c.is_alphanumeric() || c == '_') {
             self.advance();
         }
 
@@ -209,7 +209,7 @@ fn is_digit(c: Option<char>) -> bool {
 }
 
 fn is_alpha(c: Option<char>) -> bool {
-    c.is_some_and(|c| c.is_alphabetic())
+    c.is_some_and(|c| c.is_alphabetic() || c == '_')
 }
 
 fn is_keyword(text: &str) -> Option<TokenType> {
