@@ -100,15 +100,9 @@ impl Lexer {
 
                 TokenType::Slash
             }
+            '"' => return self.lex_string(),
             ' ' | '\r' | '\n' | '\t' => return Ok(None),
-            other => {
-                let line = self.get_line_from_offset(self.start);
-                return Err(Error::new(
-                    line,
-                    self.path.clone(),
-                    format!("Unexepcted character: {other}"),
-                ));
-            }
+            other => return Err(self.generate_error(format!("Unexpected token: {other}"))),
         };
 
         Ok(Some(Token::new(token_type, (self.start, self.current))))
@@ -139,12 +133,34 @@ impl Lexer {
         true
     }
 
+    fn lex_string(&mut self) -> Result<Option<Token>, Error> {
+        while self.peek() != Some('"') && !self.is_at_end() {
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Err(self.generate_error(String::from("Unterminated string.")));
+        }
+
+        self.advance();
+
+        let value = &self.source[self.start + 1..self.current - 1];
+        let token_type = TokenType::String(String::from_iter(value));
+
+        Ok(Some(Token::new(token_type, (self.start, self.current))))
+    }
+
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
     fn get_line_from_offset(&self, offset: usize) -> usize {
         self.source[..offset].iter().filter(|&&c| c == '\n').count() + 1
+    }
+
+    fn generate_error(&self, message: String) -> Error {
+        let line = self.get_line_from_offset(self.start);
+        Error::new(line, self.path.clone(), message)
     }
 }
 
@@ -164,6 +180,39 @@ mod tests {
         assert_eq!(tokens[0].token, TokenType::LeftParen);
         assert_eq!(tokens[1].token, TokenType::RightParen);
         assert_eq!(tokens[2].token, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_check_parenthesis_with_space() {
+        let source = r#"
+            ( 
+            )
+        "#;
+
+        let lexer = create_new_lexer(source);
+        let tokens = lexer.scan().unwrap();
+
+        assert_eq!(tokens.len(), 3);
+
+        assert_eq!(tokens[0].token, TokenType::LeftParen);
+        assert_eq!(tokens[1].token, TokenType::RightParen);
+        assert_eq!(tokens[2].token, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_string_lexing() {
+        let source = r#""Hello, world!""#;
+
+        let lexer = create_new_lexer(source);
+        let tokens = lexer.scan().unwrap();
+
+        assert_eq!(tokens.len(), 2);
+
+        assert_eq!(
+            tokens[0].token,
+            TokenType::String("Hello, world!".to_string())
+        );
+        assert_eq!(tokens[1].token, TokenType::Eof);
     }
 
     fn create_new_lexer(source: &str) -> Lexer {
