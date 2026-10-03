@@ -19,7 +19,7 @@ impl Token {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -47,7 +47,7 @@ pub enum TokenType {
     // Literals.
     Identifier(String),
     String(String),
-    Number(usize),
+    Number(f64),
 
     // Keywords
     And,

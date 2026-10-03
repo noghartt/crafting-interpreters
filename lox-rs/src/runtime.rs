@@ -15,8 +15,10 @@ impl Runtime {
     }
 
     pub fn run(self, source: String) -> Result<(), Error> {
-        let mut scanner = Lexer::new(self.start_file, source);
-        scanner.scan()?;
-        todo!("To be executed...");
+        let lexer = Lexer::new(self.start_file, source);
+        let tokens = lexer.scan()?;
+        println!("Tokens: {tokens:?}");
+
+        Ok(())
     }
 }
