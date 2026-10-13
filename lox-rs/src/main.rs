@@ -2,6 +2,7 @@ use std::env;
 
 mod error;
 mod lexer;
+mod parser;
 mod runtime;
 
 use crate::runtime::Runtime;
