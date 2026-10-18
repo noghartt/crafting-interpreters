@@ -15,7 +15,7 @@ impl Runtime {
     }
 
     pub fn run(self, source: String) -> Result<(), Error> {
-        let lexer = Lexer::new(self.start_file, source);
+        let mut lexer = Lexer::new(self.start_file, source);
         let tokens = lexer.scan()?;
         println!("Tokens: {tokens:?}");
 

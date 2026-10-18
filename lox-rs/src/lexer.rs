@@ -21,7 +21,7 @@ impl Lexer {
         }
     }
 
-    pub fn scan(mut self) -> Result<Vec<Token>, Error> {
+    pub fn scan(&mut self) -> Result<Vec<Token>, Error> {
         let mut tokens: Vec<Token> = Vec::new();
         loop {
             if self.is_at_end() {
@@ -271,7 +271,7 @@ mod tests {
     fn test_check_parenthesis() {
         let source = "( )";
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 3);
@@ -288,7 +288,7 @@ mod tests {
             )
         "#;
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 3);
@@ -302,7 +302,7 @@ mod tests {
     fn test_string_lexing() {
         let source = r#""Hello, world!""#;
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -318,7 +318,7 @@ mod tests {
     fn test_comment() {
         let source = r#"// Hi ("#;
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 1);
@@ -333,7 +333,7 @@ mod tests {
         "Hello, world!"
         "#;
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -346,7 +346,7 @@ mod tests {
     fn test_lex_digit_without_floating() {
         let source = "12345";
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -359,7 +359,7 @@ mod tests {
     fn test_lex_digit_with_floating() {
         let source = "3.1415";
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -378,10 +378,8 @@ mod tests {
         "Hello, world!"
         "#;
 
-        let lexer = create_new_lexer(source);
+        let mut lexer = create_new_lexer(source);
         let tokens = lexer.scan().unwrap();
-
-        println!("{tokens:?}");
 
         assert_eq!(tokens.len(), 2);
 

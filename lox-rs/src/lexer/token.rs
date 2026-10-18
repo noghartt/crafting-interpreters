@@ -1,7 +1,9 @@
+use std::fmt;
+
 #[derive(Debug)]
 pub struct TokenMetadata {
     /// Start and end position of a token.
-    offset: (usize, usize),
+    pub offset: (usize, usize),
 }
 
 #[derive(Debug)]
@@ -68,4 +70,61 @@ pub enum TokenType {
     While,
 
     Eof,
+}
+
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
+            // Single-character tokens.
+            TokenType::LeftParen => "(",
+            TokenType::RightParen => ")",
+            TokenType::LeftBrace => "{",
+            TokenType::RightBrace => "}",
+            TokenType::Comma => ",",
+            TokenType::Dot => ".",
+            TokenType::Minus => "-",
+            TokenType::Plus => "+",
+            TokenType::Semicolon => ";",
+            TokenType::Slash => "/",
+            TokenType::Star => "*",
+
+            // One or two character tokens.
+            TokenType::Bang => "!",
+            TokenType::BangEqual => "!=",
+            TokenType::Equal => "=",
+            TokenType::EqualEqual => "==",
+            TokenType::Greater => ">",
+            TokenType::GreaterEqual => ">=",
+            TokenType::Less => "<",
+            TokenType::LessEqual => "<=",
+
+            // Literals: the text lives in the payload.
+            TokenType::Identifier(name) => return write!(f, "{name}"),
+            TokenType::String(s) => return write!(f, "\"{s}\""),
+            TokenType::Number(n) => return write!(f, "{n}"),
+
+            // Keywords.
+            TokenType::And => "and",
+            TokenType::Class => "class",
+            TokenType::Else => "else",
+            TokenType::False => "false",
+            TokenType::Fun => "fun",
+            TokenType::For => "for",
+            TokenType::If => "if",
+            TokenType::Nil => "nil",
+            TokenType::Or => "or",
+            TokenType::Print => "print",
+            TokenType::Return => "return",
+            TokenType::Super => "super",
+            TokenType::This => "this",
+            TokenType::True => "true",
+            TokenType::Var => "var",
+            TokenType::While => "while",
+
+            // EOF has no source text, so its lexeme is empty (as in the book).
+            TokenType::Eof => "",
+        };
+
+        f.write_str(text)
+    }
 }
