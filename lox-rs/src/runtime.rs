@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::lexer::Lexer;
+use crate::parser::Parser;
 
 pub struct Runtime {
     had_error: bool,
@@ -17,7 +18,11 @@ impl Runtime {
     pub fn run(self, source: String) -> Result<(), Error> {
         let mut lexer = Lexer::new(self.start_file, source);
         let tokens = lexer.scan()?;
-        println!("Tokens: {tokens:?}");
+        let mut parser = Parser::new(tokens);
+
+        let ast = parser.parse();
+
+        println!("{ast}");
 
         Ok(())
     }
