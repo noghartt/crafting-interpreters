@@ -174,6 +174,29 @@ impl Parser {
     fn error(&self, token: &Token, message: &str) -> Error {
         Error::new(ErrorKind::Parse, token.metadata.span, String::from(message))
     }
+
+    fn synchronize(&mut self) {
+        self.advance();
+        while !self.is_at_end() {
+            if self.previous().token == TokenType::Semicolon {
+                return;
+            }
+
+            match self.peek().token {
+                TokenType::Class
+                | TokenType::For
+                | TokenType::Fun
+                | TokenType::If
+                | TokenType::Print
+                | TokenType::Return
+                | TokenType::Var
+                | TokenType::While => return,
+                _ => continue,
+            }
+        }
+
+        self.advance();
+    }
 }
 
 #[cfg(test)]
