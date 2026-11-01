@@ -117,7 +117,7 @@ impl Parser {
                     expression: Box::new(expr),
                 });
             }
-            _ => panic!("Expect expression."),
+            _ => return Err(self.error(self.peek(), "Expect expression.")),
         };
 
         self.advance();
