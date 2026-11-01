@@ -2,6 +2,7 @@ mod expr;
 
 pub use expr::{Expr, LiteralValue};
 
+use crate::error::{Error, ErrorKind};
 use crate::lexer::{Token, TokenType};
 
 pub struct Parser {
@@ -14,31 +15,31 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Expr {
+    pub fn parse(&mut self) -> Result<Expr, Error> {
         self.expression()
     }
 
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Result<Expr, Error> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expr {
-        let mut expr = self.comparison();
+    fn equality(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.comparison()?;
         while self.match_tokens(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             let operator = self.previous().clone();
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = Expr::BinaryExpr {
                 left: Box::new(expr),
-                operator: operator.clone(),
+                operator,
                 right: Box::new(right),
             };
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn comparison(&mut self) -> Expr {
-        let mut expr = self.term();
+    fn comparison(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.term()?;
         while self.match_tokens(&[
             TokenType::Greater,
             TokenType::GreaterEqual,
@@ -46,22 +47,22 @@ impl Parser {
             TokenType::LessEqual,
         ]) {
             let operator = self.previous().clone();
-            let right = self.term();
+            let right = self.term()?;
             expr = Expr::BinaryExpr {
                 left: Box::new(expr),
-                operator: operator.clone(),
+                operator,
                 right: Box::new(right),
             }
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn term(&mut self) -> Expr {
-        let mut expr = self.factor();
+    fn term(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.factor()?;
         while self.match_tokens(&[TokenType::Minus, TokenType::Plus]) {
             let operator = self.previous().clone();
-            let right = self.factor();
+            let right = self.factor()?;
             expr = Expr::BinaryExpr {
                 left: Box::new(expr),
                 operator,
@@ -69,38 +70,38 @@ impl Parser {
             }
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn factor(&mut self) -> Expr {
-        let mut expr = self.unary();
+    fn factor(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.unary()?;
         while self.match_tokens(&[TokenType::Slash, TokenType::Star]) {
             let operator = self.previous().clone();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = Expr::BinaryExpr {
                 left: Box::new(expr),
-                operator: operator.clone(),
+                operator,
                 right: Box::new(right),
             }
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Result<Expr, Error> {
         if self.match_tokens(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous().clone();
-            let right = self.unary();
-            return Expr::UnaryExpr {
+            let right = self.unary()?;
+            return Ok(Expr::UnaryExpr {
                 operator,
                 right: Box::new(right),
-            };
+            });
         }
 
         self.primary()
     }
 
-    fn primary(&mut self) -> Expr {
+    fn primary(&mut self) -> Result<Expr, Error> {
         let value = match &self.peek().token {
             TokenType::False => LiteralValue::Bool(false),
             TokenType::True => LiteralValue::Bool(true),
@@ -109,18 +110,18 @@ impl Parser {
             TokenType::String(s) => LiteralValue::String(s.clone()),
             TokenType::LeftParen => {
                 self.advance();
-                let expr = self.expression();
-                self.consume(TokenType::RightParen, "Expect ')' after expression.");
+                let expr = self.expression()?;
+                self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
 
-                return Expr::Grouping {
+                return Ok(Expr::Grouping {
                     expression: Box::new(expr),
-                };
+                });
             }
             _ => panic!("Expect expression."),
         };
 
         self.advance();
-        Expr::Literal { value }
+        Ok(Expr::Literal { value })
     }
 
     fn peek(&self) -> &Token {
@@ -162,12 +163,16 @@ impl Parser {
         self.previous()
     }
 
-    fn consume(&mut self, r#type: TokenType, message: &str) -> &Token {
+    fn consume(&mut self, r#type: TokenType, message: &str) -> Result<&Token, Error> {
         if self.check(r#type) {
-            return self.advance();
+            return Ok(self.advance());
         }
 
-        panic!("{message}")
+        Err(self.error(self.peek(), message))
+    }
+
+    fn error(&self, token: &Token, message: &str) -> Error {
+        Error::new(ErrorKind::Parse, token.metadata.span, String::from(message))
     }
 }
 
@@ -176,28 +181,68 @@ mod tests {
     use super::*;
 
     use crate::lexer::Lexer;
+    use crate::source::SourceMap;
 
     #[test]
     fn test_validate_parser_flow() {
         let source = String::from("6 / 3 - 1");
-        let mut lexer = Lexer::new("test.rs".into(), source);
-        let tokens = lexer.scan().unwrap();
-
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse();
+        let ast = parse_source(&source).unwrap();
 
         assert_eq!(ast.to_string(), "(- (/ 6 3) 1)")
     }
 
     #[test]
-    fn test_foo() {
-        let source = String::from("var foo = \"olá mundo\"");
-        let mut lexer = Lexer::new("test.rs".into(), source);
-        let tokens = lexer.scan().unwrap();
+    fn test_missing_paren_at_end() {
+        assert_eq!(
+            parse_error("(1 + 2"),
+            "[line 1] Error (CLI) at end: Expect ')' after expression."
+        );
+    }
 
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse();
+    #[test]
+    fn test_missing_paren_at_unexpected_token() {
+        assert_eq!(
+            parse_error("(1 + 2 3"),
+            "[line 1] Error (CLI) at '3': Expect ')' after expression."
+        );
+    }
 
-        println!("{ast}")
+    #[test]
+    fn test_missing_paren_in_nested_group() {
+        assert_eq!(
+            parse_error("((1)"),
+            "[line 1] Error (CLI) at end: Expect ')' after expression."
+        );
+    }
+
+    #[test]
+    fn test_missing_paren_on_later_line() {
+        assert_eq!(
+            parse_error("1 +\n(2\n"),
+            "[line 3] Error (CLI) at end: Expect ')' after expression."
+        );
+    }
+
+    #[test]
+    fn test_missing_paren_after_non_ascii() {
+        assert_eq!(
+            parse_error("\"olá\" == (1 2"),
+            "[line 1] Error (CLI) at '2': Expect ')' after expression."
+        );
+    }
+
+    fn parse_source(source: &str) -> Result<Expr, Error> {
+        let mut sources = SourceMap::default();
+        let file = sources.add(None, source);
+        let tokens = Lexer::new(file, &sources.get(file).chars).scan()?;
+        Parser::new(tokens).parse()
+    }
+
+    fn parse_error(source: &str) -> String {
+        let mut sources = SourceMap::default();
+        let file = sources.add(None, source);
+        let tokens = Lexer::new(file, &sources.get(file).chars).scan().unwrap();
+
+        Parser::new(tokens).parse().unwrap_err().render(&sources)
     }
 }

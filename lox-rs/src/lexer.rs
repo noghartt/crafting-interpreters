@@ -2,20 +2,21 @@ mod token;
 
 pub use token::{Token, TokenType};
 
-use crate::error::Error;
+use crate::error::{Error, ErrorKind};
+use crate::source::{FileId, Span};
 
-pub struct Lexer {
-    path: String,
-    source: Vec<char>,
+pub struct Lexer<'a> {
+    file: FileId,
+    source: &'a [char],
     start: usize,
     current: usize,
 }
 
-impl Lexer {
-    pub fn new(path: String, source: String) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(file: FileId, source: &'a [char]) -> Self {
         Self {
-            path,
-            source: source.chars().collect(),
+            file,
+            source,
             start: 0,
             current: 0,
         }
@@ -38,7 +39,10 @@ impl Lexer {
             tokens.push(token.unwrap());
         }
 
-        tokens.push(Token::new(TokenType::Eof, (self.current, self.current)));
+        tokens.push(Token::new(
+            TokenType::Eof,
+            self.span_at(self.current, self.current),
+        ));
 
         Ok(tokens)
     }
@@ -124,7 +128,10 @@ impl Lexer {
             other => return Err(self.generate_error(format!("Unexpected token: {other}"))),
         };
 
-        Ok(Some(Token::new(token_type, (self.start, self.current))))
+        Ok(Some(Token::new(
+            token_type,
+            self.span_at(self.start, self.current),
+        )))
     }
 
     fn lex_string(&mut self) -> Result<Option<Token>, Error> {
@@ -141,7 +148,10 @@ impl Lexer {
         let value = &self.source[self.start + 1..self.current - 1];
         let token_type = TokenType::String(String::from_iter(value));
 
-        Ok(Some(Token::new(token_type, (self.start, self.current))))
+        Ok(Some(Token::new(
+            token_type,
+            self.span_at(self.start, self.current),
+        )))
     }
 
     fn lex_number(&mut self) -> Result<Option<Token>, Error> {
@@ -160,7 +170,10 @@ impl Lexer {
         let number = value.parse::<f64>().unwrap();
         let token_type = TokenType::Number(number);
 
-        Ok(Some(Token::new(token_type, (self.start, self.current))))
+        Ok(Some(Token::new(
+            token_type,
+            self.span_at(self.start, self.current),
+        )))
     }
 
     fn lex_identifier(&mut self) -> Result<Option<Token>, Error> {
@@ -171,7 +184,10 @@ impl Lexer {
         let text = String::from_iter(&self.source[self.start..self.current]);
         let token_type = is_keyword(&text).unwrap_or(TokenType::Identifier(text));
 
-        Ok(Some(Token::new(token_type, (self.start, self.current))))
+        Ok(Some(Token::new(
+            token_type,
+            self.span_at(self.start, self.current),
+        )))
     }
 
     fn peek(&self) -> Option<char> {
@@ -223,13 +239,20 @@ impl Lexer {
         self.current >= self.source.len()
     }
 
-    fn get_line_from_offset(&self, offset: usize) -> usize {
-        self.source[..offset].iter().filter(|&&c| c == '\n').count() + 1
+    fn span_at(&self, start: usize, end: usize) -> Span {
+        Span {
+            file: self.file,
+            start,
+            end,
+        }
     }
 
     fn generate_error(&self, message: String) -> Error {
-        let line = self.get_line_from_offset(self.start);
-        Error::new(line, self.path.clone(), message)
+        Error::new(
+            ErrorKind::Lex,
+            self.span_at(self.start, self.current),
+            message,
+        )
     }
 }
 
@@ -267,12 +290,13 @@ fn is_keyword(text: &str) -> Option<TokenType> {
 mod tests {
     use super::*;
 
+    use crate::source::SourceMap;
+
     #[test]
     fn test_check_parenthesis() {
         let source = "( )";
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 3);
 
@@ -288,8 +312,7 @@ mod tests {
             )
         "#;
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 3);
 
@@ -302,8 +325,7 @@ mod tests {
     fn test_string_lexing() {
         let source = r#""Hello, world!""#;
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 2);
 
@@ -318,8 +340,7 @@ mod tests {
     fn test_comment() {
         let source = r#"// Hi ("#;
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 1);
 
@@ -333,8 +354,7 @@ mod tests {
         "Hello, world!"
         "#;
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 2);
 
@@ -346,8 +366,7 @@ mod tests {
     fn test_lex_digit_without_floating() {
         let source = "12345";
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 2);
 
@@ -359,8 +378,7 @@ mod tests {
     fn test_lex_digit_with_floating() {
         let source = "3.1415";
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 2);
 
@@ -378,8 +396,7 @@ mod tests {
         "Hello, world!"
         "#;
 
-        let mut lexer = create_new_lexer(source);
-        let tokens = lexer.scan().unwrap();
+        let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 2);
 
@@ -390,7 +407,9 @@ mod tests {
         assert_eq!(tokens[1].token, TokenType::Eof);
     }
 
-    fn create_new_lexer(source: &str) -> Lexer {
-        Lexer::new("".to_string(), source.to_string())
+    fn scan_tokens(source: &str) -> Result<Vec<Token>, Error> {
+        let mut sources = SourceMap::default();
+        let file = sources.add(None, source);
+        Lexer::new(file, &sources.get(file).chars).scan()
     }
 }

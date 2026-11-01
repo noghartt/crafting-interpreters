@@ -60,17 +60,25 @@ mod tests {
     use super::*;
 
     use crate::lexer::TokenType;
+    use crate::source::{SourceMap, Span};
 
     #[test]
     fn test_ast_printer() {
+        let file = SourceMap::default().add(None, "");
+        let span = Span {
+            file,
+            start: 0,
+            end: 0,
+        };
+
         let expression = Expr::BinaryExpr {
             left: Box::new(Expr::UnaryExpr {
                 right: Box::new(Expr::Literal {
                     value: LiteralValue::Number(123.0),
                 }),
-                operator: Token::new(TokenType::Minus, (0, 0)),
+                operator: Token::new(TokenType::Minus, span),
             }),
-            operator: Token::new(TokenType::Star, (0, 0)),
+            operator: Token::new(TokenType::Star, span),
             right: Box::new(Expr::Grouping {
                 expression: Box::new(Expr::Literal {
                     value: LiteralValue::Number(45.67),

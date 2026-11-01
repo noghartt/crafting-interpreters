@@ -1,9 +1,11 @@
 use std::fmt;
 
+use crate::source::Span;
+
 #[derive(Clone, Debug)]
 pub struct TokenMetadata {
-    /// Start and end position of a token.
-    pub offset: (usize, usize),
+    /// File and start/end char positions of a token.
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -13,10 +15,10 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(token: TokenType, offset: (usize, usize)) -> Self {
+    pub fn new(token: TokenType, span: Span) -> Self {
         Token {
             token,
-            metadata: TokenMetadata { offset },
+            metadata: TokenMetadata { span },
         }
     }
 }

@@ -4,6 +4,7 @@ mod error;
 mod lexer;
 mod parser;
 mod runtime;
+mod source;
 
 use crate::runtime::Runtime;
 
@@ -26,6 +27,9 @@ fn main() {
 fn run_prompt() {
     use std::io::{self, Write};
 
+    // One session for the whole REPL, so later chapters can keep state
+    // (e.g. global variables) across lines.
+    let mut runtime = Runtime::default();
     let mut input = String::new();
     loop {
         print!("> ");
@@ -33,8 +37,6 @@ fn run_prompt() {
 
         input.clear();
 
-        // TODO: Improve how to manage path, see some way to approach it better.
-        let runtime = Runtime::new("".to_string());
         match io::stdin().read_line(&mut input) {
             Ok(0) => {
                 println!("\nExiting...");
@@ -46,10 +48,7 @@ fn run_prompt() {
                     println!("\nExiting...");
                 }
 
-                match runtime.run(trimmed.to_owned()) {
-                    Ok(result) => println!("{result:?}"),
-                    Err(e) => println!("Error: {e:?}"),
-                }
+                runtime.run(None, trimmed);
             }
             Err(err) => {
                 eprintln!("Error reading input: {err}");
@@ -64,6 +63,10 @@ fn run_file(path: &String) {
 
     let content = fs::read_to_string(path).expect("Should read the right file path");
 
-    let runtime = Runtime::new(path.to_owned());
-    let _ = runtime.run(content);
+    let mut runtime = Runtime::default();
+    runtime.run(Some(path.to_owned()), &content);
+
+    if runtime.had_error() {
+        std::process::exit(65);
+    }
 }
