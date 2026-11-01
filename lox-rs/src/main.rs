@@ -48,7 +48,12 @@ fn run_prompt() {
                     println!("\nExiting...");
                 }
 
-                runtime.run(None, trimmed);
+                match runtime.run(None, trimmed) {
+                    Ok(result) => println!("{result}"),
+                    Err(error) => {
+                        eprintln!("{}", error.render(&runtime.sources));
+                    }
+                };
             }
             Err(err) => {
                 eprintln!("Error reading input: {err}");
@@ -64,9 +69,11 @@ fn run_file(path: &String) {
     let content = fs::read_to_string(path).expect("Should read the right file path");
 
     let mut runtime = Runtime::default();
-    runtime.run(Some(path.to_owned()), &content);
-
-    if runtime.had_error() {
-        std::process::exit(65);
-    }
+    match runtime.run(Some(path.to_owned()), &content) {
+        Ok(result) => println!("{result}"),
+        Err(error) => {
+            eprintln!("{}", error.render(&runtime.sources));
+            std::process::exit(65);
+        }
+    };
 }
