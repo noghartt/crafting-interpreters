@@ -8,15 +8,27 @@ use crate::lexer::{Token, TokenType};
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    errors: Vec<Error>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, current: 0 }
+        Self {
+            tokens,
+            current: 0,
+            errors: Vec::new(),
+        }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, Error> {
-        self.expression()
+    pub fn parse(mut self) -> Result<Expr, Vec<Error>> {
+        match self.expression() {
+            Ok(expr) if self.errors.is_empty() => Ok(expr),
+            Ok(_) => Err(self.errors),
+            Err(e) => {
+                self.errors.push(e);
+                Err(self.errors)
+            }
+        }
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
@@ -369,10 +381,12 @@ mod tests {
         );
     }
 
-    fn parse_source(source: &str) -> Result<Expr, Error> {
+    fn parse_source(source: &str) -> Result<Expr, Vec<Error>> {
         let mut sources = SourceMap::default();
         let file = sources.add(None, source);
-        let tokens = Lexer::new(file, &sources.get(file).chars).scan()?;
+        let tokens = Lexer::new(file, &sources.get(file).chars)
+            .scan()
+            .map_err(|error| vec![error])?;
         Parser::new(tokens).parse()
     }
 
@@ -381,6 +395,12 @@ mod tests {
         let file = sources.add(None, source);
         let tokens = Lexer::new(file, &sources.get(file).chars).scan().unwrap();
 
-        Parser::new(tokens).parse().unwrap_err().render(&sources)
+        Parser::new(tokens)
+            .parse()
+            .unwrap_err()
+            .iter()
+            .map(|error| error.render(&sources))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

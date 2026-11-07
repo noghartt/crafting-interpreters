@@ -9,10 +9,12 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn run(&mut self, path: Option<String>, text: &str) -> Result<Expr, Error> {
+    pub fn run(&mut self, path: Option<String>, text: &str) -> Result<Expr, Vec<Error>> {
         let file = self.sources.add(path, text);
         let source = &self.sources.get(file).chars;
-        let tokens = Lexer::new(file, source).scan()?;
+        let tokens = Lexer::new(file, source)
+            .scan()
+            .map_err(|error| vec![error])?;
         Parser::new(tokens).parse()
     }
 }

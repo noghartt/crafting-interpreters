@@ -50,8 +50,10 @@ fn run_prompt() {
 
                 match runtime.run(None, trimmed) {
                     Ok(result) => println!("{result}"),
-                    Err(error) => {
-                        eprintln!("{}", error.render(&runtime.sources));
+                    Err(errors) => {
+                        for error in &errors {
+                            eprintln!("{}", error.render(&runtime.sources))
+                        }
                     }
                 };
             }
@@ -71,8 +73,10 @@ fn run_file(path: &String) {
     let mut runtime = Runtime::default();
     match runtime.run(Some(path.to_owned()), &content) {
         Ok(result) => println!("{result}"),
-        Err(error) => {
-            eprintln!("{}", error.render(&runtime.sources));
+        Err(errors) => {
+            for error in &errors {
+                eprintln!("{}", error.render(&runtime.sources))
+            }
             std::process::exit(65);
         }
     };

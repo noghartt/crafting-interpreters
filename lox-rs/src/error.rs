@@ -1,12 +1,12 @@
 use crate::source::{SourceFile, SourceMap, Span};
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ErrorKind {
     Lex,
     Parse,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error {
     kind: ErrorKind,
     span: Span,
