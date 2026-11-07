@@ -20,7 +20,18 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
-        self.equality()
+        let mut expr = self.equality()?;
+        while self.match_tokens(&[TokenType::Comma]) {
+            let operator = self.previous().clone();
+            let right = self.equality()?;
+            expr = Expr::BinaryExpr {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, Error> {
@@ -212,6 +223,38 @@ mod tests {
         let ast = parse_source(&source).unwrap();
 
         assert_eq!(ast.to_string(), "(- (/ 6 3) 1)")
+    }
+
+    #[test]
+    fn test_validate_parser_comma_with_equal_equal_on_first_precedence() {
+        let source = String::from("1 == 1, 2");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(, (== 1 1) 2)")
+    }
+
+    #[test]
+    fn test_validate_parser_comma_with_equal_equal_on_second_precedence() {
+        let source = String::from("1, 2 == 2");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(, 1 (== 2 2))")
+    }
+
+    #[test]
+    fn test_validate_comma_with_parenthesis() {
+        let source = String::from("(1, 2)");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(group (, 1 2))")
+    }
+
+    #[test]
+    fn test_validate_parser_comma() {
+        let source = String::from("1, 2, 3");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(, (, 1 2) 3)")
     }
 
     #[test]
