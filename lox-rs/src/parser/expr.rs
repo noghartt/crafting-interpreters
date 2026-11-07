@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::lexer::Token;
+use crate::{lexer::Token, parser::Expr::Conditional};
 
 #[derive(Debug)]
 pub enum LiteralValue {
@@ -34,6 +34,7 @@ macro_rules! syntax {
 }
 
 syntax!(
+    Conditional -> condition: Expr, then_branch: Expr, else_branch: Expr;
     BinaryExpr -> left: Expr, operator: Token, right: Expr;
     UnaryExpr -> operator: Token, right: Expr;
     Grouping -> expression: Expr;
@@ -48,9 +49,14 @@ impl std::fmt::Display for Expr {
                 operator,
                 right,
             } => write!(f, "({} {left} {right})", operator.token),
+            Self::Conditional {
+                condition,
+                then_branch,
+                else_branch,
+            } => write!(f, "(?: {condition} {then_branch} {else_branch})"),
             Self::UnaryExpr { operator, right } => write!(f, "({} {right})", operator.token),
-            Expr::Grouping { expression } => write!(f, "(group {expression})"),
-            Expr::Literal { value } => write!(f, "{value}"),
+            Self::Grouping { expression } => write!(f, "(group {expression})"),
+            Self::Literal { value } => write!(f, "{value}"),
         }
     }
 }

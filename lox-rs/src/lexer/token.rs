@@ -37,6 +37,8 @@ pub enum TokenType {
     Semicolon,
     Slash,
     Star,
+    Question,
+    Colon,
 
     // One or two character tokens.
     Bang,
@@ -89,6 +91,8 @@ impl fmt::Display for TokenType {
             TokenType::Semicolon => ";",
             TokenType::Slash => "/",
             TokenType::Star => "*",
+            TokenType::Question => "?",
+            TokenType::Colon => ":",
 
             // One or two character tokens.
             TokenType::Bang => "!",

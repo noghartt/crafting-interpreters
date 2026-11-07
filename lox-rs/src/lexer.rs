@@ -121,6 +121,8 @@ impl<'a> Lexer<'a> {
 
                 TokenType::Slash
             }
+            '?' => TokenType::Question,
+            ':' => TokenType::Colon,
             '"' => return self.lex_string(),
             c if is_digit(Some(c)) => return self.lex_number(),
             c if is_alpha(Some(c)) => return self.lex_identifier(),

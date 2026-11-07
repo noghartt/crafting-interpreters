@@ -20,16 +20,32 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
-        let mut expr = self.equality()?;
+        let mut expr = self.ternary()?;
         while self.match_tokens(&[TokenType::Comma]) {
             let operator = self.previous().clone();
-            let right = self.equality()?;
+            let right = self.ternary()?;
             expr = Expr::BinaryExpr {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
             }
         }
+
+        Ok(expr)
+    }
+
+    fn ternary(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.equality()?;
+        if self.match_tokens(&[TokenType::Question]) {
+            let left = self.expression()?;
+            self.consume(TokenType::Colon, "Missing `:` for ternary")?;
+            let right = self.ternary()?;
+            expr = Expr::Conditional {
+                condition: Box::new(expr),
+                then_branch: Box::new(left),
+                else_branch: Box::new(right),
+            }
+        };
 
         Ok(expr)
     }
@@ -258,6 +274,46 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_ternary_nested_in_then_branch() {
+        let source = String::from("1 ? 1 ? 2 : 2 : 3");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(?: 1 (?: 1 2 2) 3)")
+    }
+
+    #[test]
+    fn test_validate_ternary_right_associative() {
+        let source = String::from("1 ? 2 : 3 ? 4 : 5");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(?: 1 2 (?: 3 4 5))")
+    }
+
+    #[test]
+    fn test_validate_ternary_binds_tighter_than_comma() {
+        let source = String::from("1 ? 2 : 3, 4");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(, (?: 1 2 3) 4)")
+    }
+
+    #[test]
+    fn test_validate_ternary_allows_comma_in_then_branch() {
+        let source = String::from("1 ? 2, 3 : 4");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(?: 1 (, 2 3) 4)")
+    }
+
+    #[test]
+    fn test_validate_ternary_looser_than_equality() {
+        let source = String::from("1 == 2 ? 3 : 4");
+        let ast = parse_source(&source).unwrap();
+
+        assert_eq!(ast.to_string(), "(?: (== 1 2) 3 4)")
+    }
+
+    #[test]
     fn test_missing_paren_at_end() {
         assert_eq!(
             parse_error("(1 + 2"),
@@ -294,6 +350,22 @@ mod tests {
         assert_eq!(
             parse_error("\"olá\" == (1 2"),
             "[line 1] Error (CLI) at '2': Expect ')' after expression."
+        );
+    }
+
+    #[test]
+    fn test_missing_colon_in_ternary_at_end() {
+        assert_eq!(
+            parse_error("1 ? 2"),
+            "[line 1] Error (CLI) at end: Missing `:` for ternary"
+        );
+    }
+
+    #[test]
+    fn test_missing_colon_in_ternary_at_unexpected_token() {
+        assert_eq!(
+            parse_error("1 ? 2 3"),
+            "[line 1] Error (CLI) at '3': Missing `:` for ternary"
         );
     }
 
