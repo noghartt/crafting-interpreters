@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{lexer::Token, parser::Expr::Conditional};
+use crate::lexer::Token;
 
 #[derive(Debug)]
 pub enum LiteralValue {

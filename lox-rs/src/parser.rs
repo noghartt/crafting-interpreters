@@ -50,7 +50,7 @@ impl Parser {
         let mut expr = self.equality()?;
         if self.match_tokens(&[TokenType::Question]) {
             let left = self.expression()?;
-            self.consume(TokenType::Colon, "Missing `:` for ternary")?;
+            self.consume(TokenType::Colon, "Missing `:` for ternary operator.")?;
             let right = self.ternary()?;
             expr = Expr::Conditional {
                 condition: Box::new(expr),
@@ -155,6 +155,47 @@ impl Parser {
                 return Ok(Expr::Grouping {
                     expression: Box::new(expr),
                 });
+            }
+            TokenType::EqualEqual | TokenType::BangEqual => {
+                self.errors
+                    .push(self.error(self.peek(), "Missing left-hand operand."));
+                self.advance();
+                return self.equality();
+            }
+            TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Less
+            | TokenType::LessEqual => {
+                self.errors
+                    .push(self.error(self.peek(), "Missing left-hand operand."));
+                self.advance();
+                return self.comparison();
+            }
+            TokenType::Plus => {
+                self.errors
+                    .push(self.error(self.peek(), "Missing left-hand operand."));
+                self.advance();
+                return self.term();
+            }
+            TokenType::Star | TokenType::Slash => {
+                self.errors
+                    .push(self.error(self.peek(), "Missing left-hand operand."));
+                self.advance();
+                return self.factor();
+            }
+            TokenType::Comma => {
+                self.errors
+                    .push(self.error(self.peek(), "Missing left-hand operand."));
+                self.advance();
+                return self.expression();
+            }
+            TokenType::Question => {
+                self.errors
+                    .push(self.error(self.peek(), "Missing conditional for ternary operator."));
+                self.advance();
+                let _ = self.expression()?;
+                self.consume(TokenType::Colon, "Missing `:` for ternary operator.")?;
+                return self.ternary();
             }
             _ => return Err(self.error(self.peek(), "Expect expression.")),
         };
@@ -379,6 +420,87 @@ mod tests {
             parse_error("1 ? 2 3"),
             "[line 1] Error (CLI) at '3': Missing `:` for ternary"
         );
+    }
+
+    #[test]
+    fn test_missing_left_operand_for_equality() {
+        assert_eq!(
+            parse_error("== 1"),
+            "[line 1] Error (CLI) at '==': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_for_comparison() {
+        assert_eq!(
+            parse_error("> 1"),
+            "[line 1] Error (CLI) at '>': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_for_term() {
+        assert_eq!(
+            parse_error("+ 1"),
+            "[line 1] Error (CLI) at '+': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_for_factor() {
+        assert_eq!(
+            parse_error("* 1"),
+            "[line 1] Error (CLI) at '*': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_for_comma() {
+        assert_eq!(
+            parse_error(", 1"),
+            "[line 1] Error (CLI) at ',': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_condition_for_ternary() {
+        assert_eq!(
+            parse_error("? 1 : 2"),
+            "[line 1] Error (CLI) at '?': Missing conditional for ternary operator."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_discards_whole_right_operand() {
+        assert_eq!(
+            parse_error("+ 1 * 2 + 3"),
+            "[line 1] Error (CLI) at '+': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_keeps_parsing() {
+        assert_eq!(
+            parse_error("== 1, == 2"),
+            "[line 1] Error (CLI) at '==': Missing left-hand operand.\n\
+             [line 1] Error (CLI) at '==': Missing left-hand operand."
+        );
+    }
+
+    #[test]
+    fn test_missing_left_operand_followed_by_hard_error() {
+        assert_eq!(
+            parse_error("== 1 + (2"),
+            "[line 1] Error (CLI) at '==': Missing left-hand operand.\n\
+             [line 1] Error (CLI) at end: Expect ')' after expression."
+        );
+    }
+
+    #[test]
+    fn test_unary_minus_is_not_an_error_production() {
+        let ast = parse_source("-1").unwrap();
+
+        assert_eq!(ast.to_string(), "(- 1)")
     }
 
     fn parse_source(source: &str) -> Result<Expr, Vec<Error>> {
