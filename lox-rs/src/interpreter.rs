@@ -53,6 +53,8 @@ impl Interpreter {
 
         match operator.token {
             TokenType::Plus => match (left, right) {
+                (Value::Number(a), Value::String(b)) => Ok(Value::String(format!("{a}{b}"))),
+                (Value::String(a), Value::Number(b)) => Ok(Value::String(format!("{a}{b}"))),
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
                 (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
                 _ => Err(Error::new(
@@ -62,7 +64,17 @@ impl Interpreter {
                 )),
             },
             TokenType::Minus => numeric(&operator, left, right, |a, b| Value::Number(a - b)),
-            TokenType::Slash => numeric(&operator, left, right, |a, b| Value::Number(a / b)),
+            TokenType::Slash => {
+                if right == Value::Number(0.0) {
+                    return Err(Error::new(
+                        ErrorKind::Runtime,
+                        operator.metadata.span,
+                        String::from("You can't divide by 0."),
+                    ));
+                }
+
+                numeric(&operator, left, right, |a, b| Value::Number(a / b))
+            }
             TokenType::Star => numeric(&operator, left, right, |a, b| Value::Number(a * b)),
             TokenType::Greater => numeric(&operator, left, right, |a, b| Value::Bool(a > b)),
             TokenType::GreaterEqual => numeric(&operator, left, right, |a, b| Value::Bool(a >= b)),
