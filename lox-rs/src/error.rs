@@ -4,6 +4,7 @@ use crate::source::{SourceFile, SourceMap, Span};
 pub enum ErrorKind {
     Lex,
     Parse,
+    Runtime,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,10 @@ impl Error {
             span,
             message,
         }
+    }
+
+    pub fn kind(&self) -> ErrorKind {
+        self.kind.clone()
     }
 
     pub fn render(&self, sources: &SourceMap) -> String {
@@ -54,6 +59,7 @@ mod tests {
     use super::*;
 
     const EXPECT_PAREN: &str = "Expect ')' after expression.";
+    const ERROR_KIND_RUNTIME: &str = "Error while evaluating your code.";
 
     fn render(
         source: &str,
@@ -67,6 +73,7 @@ mod tests {
         let message = match kind {
             ErrorKind::Lex => "Unterminated string.",
             ErrorKind::Parse => EXPECT_PAREN,
+            ErrorKind::Runtime => ERROR_KIND_RUNTIME,
         };
 
         Error::new(kind, Span { file, start, end }, message.to_string()).render(&sources)

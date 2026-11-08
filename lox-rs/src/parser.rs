@@ -410,7 +410,7 @@ mod tests {
     fn test_missing_colon_in_ternary_at_end() {
         assert_eq!(
             parse_error("1 ? 2"),
-            "[line 1] Error (CLI) at end: Missing `:` for ternary"
+            "[line 1] Error (CLI) at end: Missing `:` for ternary operator."
         );
     }
 
@@ -418,7 +418,7 @@ mod tests {
     fn test_missing_colon_in_ternary_at_unexpected_token() {
         assert_eq!(
             parse_error("1 ? 2 3"),
-            "[line 1] Error (CLI) at '3': Missing `:` for ternary"
+            "[line 1] Error (CLI) at '3': Missing `:` for ternary operator."
         );
     }
 

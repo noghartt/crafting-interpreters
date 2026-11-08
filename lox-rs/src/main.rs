@@ -1,12 +1,13 @@
 use std::env;
 
 mod error;
+mod interpreter;
 mod lexer;
 mod parser;
 mod runtime;
 mod source;
 
-use crate::runtime::Runtime;
+use crate::{error::ErrorKind, runtime::Runtime};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -77,7 +78,13 @@ fn run_file(path: &String) {
             for error in &errors {
                 eprintln!("{}", error.render(&runtime.sources))
             }
-            std::process::exit(65);
+
+            let code = match errors[0].kind() {
+                ErrorKind::Lex | ErrorKind::Parse => 65,
+                ErrorKind::Runtime => 70,
+            };
+
+            std::process::exit(code);
         }
     };
 }

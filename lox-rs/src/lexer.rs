@@ -378,13 +378,13 @@ mod tests {
 
     #[test]
     fn test_lex_digit_with_floating() {
-        let source = "3.1415";
+        let source = "12.75";
 
         let tokens = scan_tokens(source).unwrap();
 
         assert_eq!(tokens.len(), 2);
 
-        assert_eq!(tokens[0].token, TokenType::Number(3.1415));
+        assert_eq!(tokens[0].token, TokenType::Number(12.75));
         assert_eq!(tokens[1].token, TokenType::Eof);
     }
 
