@@ -22,18 +22,22 @@ impl Parser {
 
     pub fn parse(mut self) -> Result<Vec<Statement>, Vec<Error>> {
         let mut statements: Vec<Statement> = Vec::new();
+
         while !self.is_at_end() {
             match self.declaration() {
-                Ok(stmt) if self.errors.is_empty() => statements.push(stmt),
-                Ok(_) => return Err(self.errors),
+                Ok(stmt) => statements.push(stmt),
                 Err(e) => {
                     self.errors.push(e);
-                    return Err(self.errors);
+                    self.synchronize();
                 }
             }
         }
 
-        Ok(statements)
+        if self.errors.is_empty() {
+            Ok(statements)
+        } else {
+            Err(self.errors)
+        }
     }
 
     fn declaration(&mut self) -> Result<Statement, Error> {
@@ -352,7 +356,7 @@ impl Parser {
                 | TokenType::Return
                 | TokenType::Var
                 | TokenType::While => return,
-                _ => continue,
+                _ => {}
             }
         }
 

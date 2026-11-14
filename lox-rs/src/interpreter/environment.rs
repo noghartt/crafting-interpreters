@@ -10,6 +10,7 @@ use super::Value;
 #[derive(Default)]
 pub struct Environment {
     values: HashMap<String, Value>,
+    enclosing: Option<Box<Environment>>,
 }
 
 impl Environment {
