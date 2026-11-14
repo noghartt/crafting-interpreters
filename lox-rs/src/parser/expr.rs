@@ -39,7 +39,22 @@ syntax!(
     UnaryExpr -> operator: Token, right: Expr;
     Grouping -> expression: Expr;
     Literal -> value: LiteralValue;
+    Variable -> identifier: Token;
 );
+
+#[derive(Debug)]
+pub enum Statement {
+    Var {
+        identifier: Token,
+        expression: Option<Expr>,
+    },
+    Expression {
+        expression: Expr,
+    },
+    Print {
+        expression: Expr,
+    },
+}
 
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -57,6 +72,7 @@ impl std::fmt::Display for Expr {
             Self::UnaryExpr { operator, right } => write!(f, "({} {right})", operator.token),
             Self::Grouping { expression } => write!(f, "(group {expression})"),
             Self::Literal { value } => write!(f, "{value}"),
+            Self::Variable { identifier } => write!(f, "{}", identifier.token),
         }
     }
 }

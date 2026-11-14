@@ -1,23 +1,61 @@
+mod environment;
 mod value;
 
 use crate::{
     error::{Error, ErrorKind},
+    interpreter::environment::Environment,
     lexer::{Token, TokenType},
-    parser::{Expr, LiteralValue},
+    parser::{Expr, LiteralValue, Statement},
 };
 
 pub use value::Value;
 
-pub struct Interpreter {}
+#[derive(Default)]
+pub struct Interpreter {
+    environment: Environment,
+}
 
 impl Interpreter {
-    pub fn new() -> Self {
-        Self {}
+    pub fn interpret(&mut self, statements: Vec<Statement>) -> Result<(), Error> {
+        for stmt in statements {
+            self.execute(stmt)?;
+        }
+
+        Ok(())
     }
 
-    pub fn interpret(&self, expr: Expr) -> Result<Value, Error> {
+    fn execute(&mut self, stmt: Statement) -> Result<(), Error> {
+        match stmt {
+            Statement::Expression { expression } => {
+                self.eval(expression)?;
+            }
+            Statement::Var {
+                identifier,
+                expression,
+            } => {
+                let value = match expression {
+                    Some(expr) => self.eval(expr)?,
+                    None => Value::Nil,
+                };
+
+                let TokenType::Identifier(name) = identifier.token else {
+                    unreachable!("parser only declares identifier token");
+                };
+
+                self.environment.define(name, value);
+            }
+            Statement::Print { expression } => {
+                let value = self.eval(expression)?;
+                println!("{value}");
+            }
+        }
+
+        Ok(())
+    }
+
+    fn eval(&self, expr: Expr) -> Result<Value, Error> {
         match expr {
-            Expr::Grouping { expression } => self.interpret(*expression),
+            Expr::Grouping { expression } => self.eval(*expression),
             Expr::BinaryExpr {
                 left,
                 operator,
@@ -30,6 +68,7 @@ impl Interpreter {
             } => self.eval_conditional(*condition, *then_branch, *else_branch),
             Expr::UnaryExpr { operator, right } => self.eval_unary_expr(operator, *right),
             Expr::Literal { value } => self.eval_literal(value),
+            Expr::Variable { identifier } => self.environment.get(&identifier),
         }
     }
 
@@ -39,17 +78,17 @@ impl Interpreter {
         then_branch: Expr,
         else_branch: Expr,
     ) -> Result<Value, Error> {
-        let condition = self.interpret(condition)?;
+        let condition = self.eval(condition)?;
         if condition.is_truthy() {
-            self.interpret(then_branch)
+            self.eval(then_branch)
         } else {
-            self.interpret(else_branch)
+            self.eval(else_branch)
         }
     }
 
     fn eval_binary_expr(&self, left: Expr, operator: Token, right: Expr) -> Result<Value, Error> {
-        let left = self.interpret(left)?;
-        let right = self.interpret(right)?;
+        let left = self.eval(left)?;
+        let right = self.eval(right)?;
 
         match operator.token {
             TokenType::Plus => match (left, right) {
@@ -92,7 +131,7 @@ impl Interpreter {
     }
 
     fn eval_unary_expr(&self, operator: Token, right: Expr) -> Result<Value, Error> {
-        let right = self.interpret(right)?;
+        let right = self.eval(right)?;
         match (&operator.token, right) {
             (TokenType::Bang, value) => Ok(Value::Bool(!value.is_truthy())),
             (TokenType::Minus, Value::Number(n)) => Ok(Value::Number(-n)),
@@ -267,8 +306,8 @@ mod tests {
     #[test]
     fn test_runtime_error_has_runtime_kind() {
         let mut runtime = Runtime::default();
-        let errors = match runtime.run(None, "1 + nil") {
-            Ok(value) => panic!("expected a runtime error, got {value}"),
+        let errors = match runtime.run(None, "1 + nil;") {
+            Ok(()) => panic!("expected a runtime error"),
             Err(errors) => errors,
         };
 

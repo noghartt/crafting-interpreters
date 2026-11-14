@@ -1,6 +1,6 @@
 mod expr;
 
-pub use expr::{Expr, LiteralValue};
+pub use expr::{Expr, LiteralValue, Statement};
 
 use crate::error::{Error, ErrorKind};
 use crate::lexer::{Token, TokenType};
@@ -20,15 +20,66 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self) -> Result<Expr, Vec<Error>> {
-        match self.expression() {
-            Ok(expr) if self.errors.is_empty() => Ok(expr),
-            Ok(_) => Err(self.errors),
-            Err(e) => {
-                self.errors.push(e);
-                Err(self.errors)
+    pub fn parse(mut self) -> Result<Vec<Statement>, Vec<Error>> {
+        let mut statements: Vec<Statement> = Vec::new();
+        while !self.is_at_end() {
+            match self.declaration() {
+                Ok(stmt) if self.errors.is_empty() => statements.push(stmt),
+                Ok(_) => return Err(self.errors),
+                Err(e) => {
+                    self.errors.push(e);
+                    return Err(self.errors);
+                }
             }
         }
+
+        Ok(statements)
+    }
+
+    fn declaration(&mut self) -> Result<Statement, Error> {
+        if self.match_tokens(&[TokenType::Var]) {
+            return self.var_declaration();
+        }
+
+        self.statement()
+    }
+
+    fn var_declaration(&mut self) -> Result<Statement, Error> {
+        let identifier = self.consume_identifier("Expect variable name.")?;
+        let expression = if self.match_tokens(&[TokenType::Equal]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        )?;
+        Ok(Statement::Var {
+            identifier,
+            expression,
+        })
+    }
+
+    fn statement(&mut self) -> Result<Statement, Error> {
+        if self.match_tokens(&[TokenType::Print]) {
+            return self.print_statement();
+        }
+
+        self.expression_statement()
+    }
+
+    fn print_statement(&mut self) -> Result<Statement, Error> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        Ok(Statement::Print { expression: expr })
+    }
+
+    fn expression_statement(&mut self) -> Result<Statement, Error> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+        Ok(Statement::Expression { expression: expr })
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
@@ -197,6 +248,10 @@ impl Parser {
                 self.consume(TokenType::Colon, "Missing `:` for ternary operator.")?;
                 return self.ternary();
             }
+            TokenType::Identifier(_) => {
+                let identifier = self.advance().clone();
+                return Ok(Expr::Variable { identifier });
+            }
             _ => return Err(self.error(self.peek(), "Expect expression.")),
         };
 
@@ -253,6 +308,14 @@ impl Parser {
 
     fn error(&self, token: &Token, message: &str) -> Error {
         Error::new(ErrorKind::Parse, token.metadata.span, String::from(message))
+    }
+
+    fn consume_identifier(&mut self, message: &str) -> Result<Token, Error> {
+        if matches!(self.peek().token, TokenType::Identifier(_)) {
+            return Ok(self.advance().clone());
+        }
+
+        Err(self.error(self.peek(), message))
     }
 
     fn synchronize(&mut self) {

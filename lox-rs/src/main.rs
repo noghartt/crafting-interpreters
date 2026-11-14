@@ -50,7 +50,7 @@ fn run_prompt() {
                 }
 
                 match runtime.run(None, trimmed) {
-                    Ok(result) => println!("{result}"),
+                    Ok(_) => (),
                     Err(errors) => {
                         for error in &errors {
                             eprintln!("{}", error.render(&runtime.sources))
@@ -73,7 +73,7 @@ fn run_file(path: &String) {
 
     let mut runtime = Runtime::default();
     match runtime.run(Some(path.to_owned()), &content) {
-        Ok(result) => println!("{result}"),
+        Ok(_) => (),
         Err(errors) => {
             for error in &errors {
                 eprintln!("{}", error.render(&runtime.sources))
