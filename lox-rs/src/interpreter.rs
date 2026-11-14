@@ -1,6 +1,8 @@
 mod environment;
 mod value;
 
+use std::{cell::RefCell, io::Write, rc::Rc};
+
 use crate::{
     error::{Error, ErrorKind},
     interpreter::environment::Environment,
@@ -10,12 +12,19 @@ use crate::{
 
 pub use value::Value;
 
-#[derive(Default)]
 pub struct Interpreter {
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
+    output: Box<dyn Write>,
 }
 
 impl Interpreter {
+    pub fn new(output: Box<dyn Write>) -> Self {
+        Self {
+            environment: Rc::default(),
+            output,
+        }
+    }
+
     pub fn interpret(&mut self, statements: Vec<Statement>) -> Result<(), Error> {
         for stmt in statements {
             self.execute(stmt)?;
@@ -42,15 +51,36 @@ impl Interpreter {
                     unreachable!("parser only declares identifier token");
                 };
 
-                self.environment.define(name, value);
+                self.environment.borrow_mut().define(name, value);
             }
             Statement::Print { expression } => {
                 let value = self.eval(expression)?;
-                println!("{value}");
+                writeln!(self.output, "{value}").expect("failed to write program output");
+            }
+            Statement::Block { statements } => {
+                let environment = Environment::with_enclosing(Rc::clone(&self.environment));
+                self.execute_block(statements, environment)?;
             }
         }
 
         Ok(())
+    }
+
+    fn execute_block(
+        &mut self,
+        statements: Vec<Statement>,
+        environment: Environment,
+    ) -> Result<(), Error> {
+        let previous = std::mem::replace(&mut self.environment, Rc::new(RefCell::new(environment)));
+
+        let result = statements
+            .into_iter()
+            .try_for_each(|stmt| self.execute(stmt));
+
+        // Restore on both the success and the error path (the book's `finally`).
+        self.environment = previous;
+
+        result
     }
 
     fn eval(&mut self, expr: Expr) -> Result<Value, Error> {
@@ -68,10 +98,12 @@ impl Interpreter {
             } => self.eval_conditional(*condition, *then_branch, *else_branch),
             Expr::UnaryExpr { operator, right } => self.eval_unary_expr(operator, *right),
             Expr::Literal { value } => self.eval_literal(value),
-            Expr::Variable { identifier } => self.environment.get(&identifier),
+            Expr::Variable { identifier } => self.environment.borrow().get(&identifier),
             Expr::Assign { identifier, value } => {
                 let value = self.eval(*value)?;
-                self.environment.assign(&identifier, value.clone())?;
+                self.environment
+                    .borrow_mut()
+                    .assign(&identifier, value.clone())?;
                 Ok(value)
             }
         }
@@ -188,19 +220,69 @@ fn numeric(
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        cell::RefCell,
+        io::{self, Write},
+        rc::Rc,
+    };
+
     use crate::error::ErrorKind;
     use crate::runtime::Runtime;
 
-    fn eval(source: &str) -> String {
-        let mut runtime = Runtime::default();
-        match runtime.run(None, source) {
-            Ok(value) => value.to_string(),
-            Err(errors) => errors
-                .iter()
-                .map(|error| error.render(&runtime.sources))
-                .collect::<Vec<_>>()
-                .join("\n"),
+    #[derive(Clone, Default)]
+    struct Output(Rc<RefCell<Vec<u8>>>);
+
+    impl Write for Output {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.borrow_mut().write(buf)
         }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Output {
+        fn take(&self) -> String {
+            String::from_utf8(self.0.take()).unwrap()
+        }
+    }
+
+    struct Session {
+        runtime: Runtime,
+        output: Output,
+    }
+
+    impl Session {
+        fn new() -> Self {
+            let output = Output::default();
+            Self {
+                runtime: Runtime::new(Box::new(output.clone())),
+                output,
+            }
+        }
+
+        fn run(&mut self, source: &str) -> String {
+            let result = self.runtime.run(None, source);
+            let mut lines: Vec<String> = self.output.take().lines().map(String::from).collect();
+            if let Err(errors) = result {
+                lines.extend(
+                    errors
+                        .iter()
+                        .map(|error| error.render(&self.runtime.sources)),
+                );
+            }
+
+            lines.join("\n")
+        }
+    }
+
+    fn run(source: &str) -> String {
+        Session::new().run(source)
+    }
+
+    fn eval(expression: &str) -> String {
+        run(&format!("print {expression};"))
     }
 
     #[test]
@@ -278,9 +360,15 @@ mod tests {
     }
 
     #[test]
-    fn test_plus_with_mixed_operands_is_runtime_error() {
+    fn test_plus_concatenates_string_and_number() {
+        assert_eq!(eval("\"a\" + 1"), "a1");
+        assert_eq!(eval("1 + \"a\""), "1a");
+    }
+
+    #[test]
+    fn test_plus_with_invalid_operands_is_runtime_error() {
         assert_eq!(
-            eval("\"a\" + 1"),
+            eval("\"a\" + nil"),
             "[line 1] Error (CLI) at '+': Operands must be two numbers or two strings."
         );
     }
@@ -315,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_runtime_error_has_runtime_kind() {
-        let mut runtime = Runtime::default();
+        let mut runtime = Runtime::new(Box::new(io::sink()));
         let errors = match runtime.run(None, "1 + nil;") {
             Ok(()) => panic!("expected a runtime error"),
             Err(errors) => errors,
@@ -323,5 +411,106 @@ mod tests {
 
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].kind(), ErrorKind::Runtime);
+    }
+
+    #[test]
+    fn test_print_statements_run_in_order() {
+        assert_eq!(run("print 1; print \"two\"; print nil;"), "1\ntwo\nnil");
+    }
+
+    #[test]
+    fn test_expression_statement_prints_nothing() {
+        assert_eq!(run("1 + 2;"), "");
+    }
+
+    #[test]
+    fn test_var_without_initializer_is_nil() {
+        assert_eq!(run("var a; print a;"), "nil");
+    }
+
+    #[test]
+    fn test_redeclaring_a_global_is_allowed() {
+        assert_eq!(run("var a = 1; var a = 2; print a;"), "2");
+    }
+
+    #[test]
+    fn test_assignment_is_an_expression() {
+        assert_eq!(
+            run("var a; var b; print a = b = 3; print a; print b;"),
+            "3\n3\n3"
+        );
+    }
+
+    #[test]
+    fn test_reading_undefined_variable_is_runtime_error() {
+        assert_eq!(
+            run("print x;"),
+            "[line 1] Error (CLI) at 'x': Undefined variable 'x'."
+        );
+    }
+
+    #[test]
+    fn test_assigning_undefined_variable_is_runtime_error() {
+        assert_eq!(
+            run("x = 1;"),
+            "[line 1] Error (CLI) at 'x': Undefined variable 'x'."
+        );
+    }
+
+    #[test]
+    fn test_runtime_error_stops_later_statements() {
+        assert_eq!(
+            run("print 1; print -\"x\"; print 2;"),
+            "1\n[line 1] Error (CLI) at '-': Operand must be a number."
+        );
+    }
+
+    #[test]
+    fn test_nested_blocks_shadow_and_restore() {
+        let source = "\
+            var a = \"global a\"; var b = \"global b\"; var c = \"global c\";
+            {
+              var a = \"outer a\"; var b = \"outer b\";
+              { var a = \"inner a\"; print a; print b; print c; }
+              print a; print b; print c;
+            }
+            print a; print b; print c;";
+
+        assert_eq!(
+            run(source),
+            "inner a\nouter b\nglobal c\nouter a\nouter b\nglobal c\nglobal a\nglobal b\nglobal c"
+        );
+    }
+
+    #[test]
+    fn test_assignment_in_block_updates_enclosing_variable() {
+        assert_eq!(run("var a = 1; { a = 2; } print a;"), "2");
+    }
+
+    #[test]
+    fn test_block_variable_is_gone_after_block() {
+        assert_eq!(
+            run("{ var x = 1; } print x;"),
+            "[line 1] Error (CLI) at 'x': Undefined variable 'x'."
+        );
+    }
+
+    #[test]
+    fn test_globals_persist_across_runs() {
+        let mut session = Session::new();
+        session.run("var a = 1;");
+
+        assert_eq!(session.run("print a;"), "1");
+    }
+
+    #[test]
+    fn test_runtime_error_in_block_restores_enclosing_scope() {
+        let mut session = Session::new();
+        assert_eq!(
+            session.run("var a = 1; { var a = 2; print -nil; }"),
+            "[line 1] Error (CLI) at '-': Operand must be a number."
+        );
+
+        assert_eq!(session.run("print a;"), "1");
     }
 }

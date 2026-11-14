@@ -71,6 +71,12 @@ impl Parser {
             return self.print_statement();
         }
 
+        if self.match_tokens(&[TokenType::LeftBrace]) {
+            return Ok(Statement::Block {
+                statements: self.block()?,
+            });
+        }
+
         self.expression_statement()
     }
 
@@ -84,6 +90,18 @@ impl Parser {
         let expr = self.expression()?;
         self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
         Ok(Statement::Expression { expression: expr })
+    }
+
+    fn block(&mut self) -> Result<Vec<Statement>, Error> {
+        let mut statements: Vec<Statement> = Vec::new();
+
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+
+        Ok(statements)
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
@@ -358,9 +376,9 @@ impl Parser {
                 | TokenType::While => return,
                 _ => {}
             }
-        }
 
-        self.advance();
+            self.advance();
+        }
     }
 }
 
@@ -510,7 +528,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_for_equality() {
         assert_eq!(
-            parse_error("== 1"),
+            parse_error("== 1;"),
             "[line 1] Error (CLI) at '==': Missing left-hand operand."
         );
     }
@@ -518,7 +536,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_for_comparison() {
         assert_eq!(
-            parse_error("> 1"),
+            parse_error("> 1;"),
             "[line 1] Error (CLI) at '>': Missing left-hand operand."
         );
     }
@@ -526,7 +544,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_for_term() {
         assert_eq!(
-            parse_error("+ 1"),
+            parse_error("+ 1;"),
             "[line 1] Error (CLI) at '+': Missing left-hand operand."
         );
     }
@@ -534,7 +552,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_for_factor() {
         assert_eq!(
-            parse_error("* 1"),
+            parse_error("* 1;"),
             "[line 1] Error (CLI) at '*': Missing left-hand operand."
         );
     }
@@ -542,7 +560,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_for_comma() {
         assert_eq!(
-            parse_error(", 1"),
+            parse_error(", 1;"),
             "[line 1] Error (CLI) at ',': Missing left-hand operand."
         );
     }
@@ -550,7 +568,7 @@ mod tests {
     #[test]
     fn test_missing_condition_for_ternary() {
         assert_eq!(
-            parse_error("? 1 : 2"),
+            parse_error("? 1 : 2;"),
             "[line 1] Error (CLI) at '?': Missing conditional for ternary operator."
         );
     }
@@ -558,7 +576,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_discards_whole_right_operand() {
         assert_eq!(
-            parse_error("+ 1 * 2 + 3"),
+            parse_error("+ 1 * 2 + 3;"),
             "[line 1] Error (CLI) at '+': Missing left-hand operand."
         );
     }
@@ -566,7 +584,7 @@ mod tests {
     #[test]
     fn test_missing_left_operand_keeps_parsing() {
         assert_eq!(
-            parse_error("== 1, == 2"),
+            parse_error("== 1, == 2;"),
             "[line 1] Error (CLI) at '==': Missing left-hand operand.\n\
              [line 1] Error (CLI) at '==': Missing left-hand operand."
         );
@@ -588,13 +606,81 @@ mod tests {
         assert_eq!(ast.to_string(), "(- 1)")
     }
 
+    #[test]
+    fn test_assignment_is_right_associative() {
+        let ast = parse_source("a = b = 1").unwrap();
+
+        assert_eq!(ast.to_string(), "(assign a (assign b 1))")
+    }
+
+    #[test]
+    fn test_assignment_is_looser_than_ternary() {
+        let ast = parse_source("a = 1 ? 2 : 3").unwrap();
+
+        assert_eq!(ast.to_string(), "(assign a (?: 1 2 3))")
+    }
+
+    #[test]
+    fn test_comma_is_looser_than_assignment() {
+        let ast = parse_source("a = 1, b = 2").unwrap();
+
+        assert_eq!(ast.to_string(), "(, (assign a 1) (assign b 2))")
+    }
+
+    #[test]
+    fn test_invalid_assignment_target() {
+        assert_eq!(
+            parse_error("1 = 2;"),
+            "[line 1] Error (CLI) at '=': Invalid assignment target."
+        );
+    }
+
+    #[test]
+    fn test_missing_semicolon_after_expression() {
+        assert_eq!(
+            parse_error("1 + 2"),
+            "[line 1] Error (CLI) at end: Expect ';' after expression."
+        );
+    }
+
+    #[test]
+    fn test_missing_variable_name() {
+        assert_eq!(
+            parse_error("var = 1;"),
+            "[line 1] Error (CLI) at '=': Expect variable name."
+        );
+    }
+
+    #[test]
+    fn test_unclosed_block() {
+        assert_eq!(
+            parse_error("{ print 1;"),
+            "[line 1] Error (CLI) at end: Expect '}' after block."
+        );
+    }
+
+    #[test]
+    fn test_synchronize_reports_errors_in_later_statements() {
+        assert_eq!(
+            parse_error("var = 1; print 2 print 3;"),
+            "[line 1] Error (CLI) at '=': Expect variable name.\n\
+             [line 1] Error (CLI) at 'print': Expect ';' after value."
+        );
+    }
+
     fn parse_source(source: &str) -> Result<Expr, Vec<Error>> {
         let mut sources = SourceMap::default();
-        let file = sources.add(None, source);
+        let file = sources.add(None, &format!("{source};"));
         let tokens = Lexer::new(file, &sources.get(file).chars)
             .scan()
             .map_err(|error| vec![error])?;
-        Parser::new(tokens).parse()
+
+        let mut statements = Parser::new(tokens).parse()?;
+        assert_eq!(statements.len(), 1, "expected exactly one statement");
+        match statements.remove(0) {
+            Statement::Expression { expression } => Ok(expression),
+            other => panic!("expected an expression statement, got {other:?}"),
+        }
     }
 
     fn parse_error(source: &str) -> String {

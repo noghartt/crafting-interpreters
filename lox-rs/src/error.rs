@@ -52,6 +52,10 @@ impl Error {
         let lexeme = String::from_iter(span);
         format!(" at '{lexeme}'")
     }
+
+    pub fn is_at_end(&self, sources: &SourceMap) -> bool {
+        self.kind == ErrorKind::Parse && self.span.start == sources.get(self.span.file).chars.len()
+    }
 }
 
 #[cfg(test)]
@@ -133,5 +137,23 @@ mod tests {
             render("\"abc", Some("main.lox"), ErrorKind::Lex, 0, 4),
             "[line 1] Error (main.lox): Unterminated string."
         );
+    }
+
+    #[test]
+    fn test_only_parse_errors_at_end_of_input_are_at_end() {
+        let mut sources = SourceMap::default();
+        let file = sources.add(None, "(1");
+        let is_at_end = |kind: ErrorKind, start: usize| {
+            let span = Span {
+                file,
+                start,
+                end: start,
+            };
+            Error::new(kind, span, String::new()).is_at_end(&sources)
+        };
+
+        assert!(is_at_end(ErrorKind::Parse, 2));
+        assert!(!is_at_end(ErrorKind::Parse, 1));
+        assert!(!is_at_end(ErrorKind::Lex, 2));
     }
 }

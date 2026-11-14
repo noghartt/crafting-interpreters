@@ -49,6 +49,9 @@ pub enum Statement {
         identifier: Token,
         expression: Option<Expr>,
     },
+    Block {
+        statements: Vec<Statement>,
+    },
     Expression {
         expression: Expr,
     },

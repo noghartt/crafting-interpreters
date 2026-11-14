@@ -30,10 +30,12 @@ fn run_prompt() {
 
     // One session for the whole REPL, so later chapters can keep state
     // (e.g. global variables) across lines.
-    let mut runtime = Runtime::default();
+    let mut runtime = Runtime::new(Box::new(io::stdout()));
     let mut input = String::new();
+
+    let mut buffer = String::new();
     loop {
-        print!("> ");
+        print!("{}", if buffer.is_empty() { "> " } else { "... " });
         io::stdout().flush().unwrap();
 
         input.clear();
@@ -44,19 +46,29 @@ fn run_prompt() {
                 break;
             }
             Ok(_) => {
-                let trimmed = input.trim();
-                if trimmed == "exit" {
+                if buffer.is_empty() && input.trim() == "exit" {
                     println!("\nExiting...");
+                    break;
                 }
 
-                match runtime.run(None, trimmed) {
-                    Ok(_) => (),
+                let force = input.trim().is_empty() && !buffer.is_empty();
+                buffer.push_str(&input);
+
+                match runtime.run(None, &buffer) {
+                    Err(errors)
+                        if !force && errors.iter().all(|e| e.is_at_end(&runtime.sources)) =>
+                    {
+                        continue;
+                    }
                     Err(errors) => {
                         for error in &errors {
-                            eprintln!("{}", error.render(&runtime.sources))
+                            eprintln!("{}", error.render(&runtime.sources));
                         }
                     }
-                };
+                    Ok(()) => {}
+                }
+
+                buffer.clear();
             }
             Err(err) => {
                 eprintln!("Error reading input: {err}");
@@ -67,11 +79,11 @@ fn run_prompt() {
 }
 
 fn run_file(path: &String) {
-    use std::fs;
+    use std::{fs, io};
 
     let content = fs::read_to_string(path).expect("Should read the right file path");
 
-    let mut runtime = Runtime::default();
+    let mut runtime = Runtime::new(Box::new(io::stdout()));
     match runtime.run(Some(path.to_owned()), &content) {
         Ok(_) => (),
         Err(errors) => {
