@@ -13,6 +13,24 @@ pub struct Environment {
 }
 
 impl Environment {
+    pub fn assign(&mut self, identifier: &Token, value: Value) -> Result<(), Error> {
+        let TokenType::Identifier(name) = &identifier.token else {
+            unreachable!("parser only assigns to identifier tokens");
+        };
+
+        match self.values.get_mut(name) {
+            Some(slot) => {
+                *slot = value;
+                Ok(())
+            }
+            None => Err(Error::new(
+                ErrorKind::Runtime,
+                identifier.metadata.span,
+                format!("Undefined variable '{name}'."),
+            )),
+        }
+    }
+
     pub fn define(&mut self, name: String, value: Value) {
         self.values.insert(name, value);
     }

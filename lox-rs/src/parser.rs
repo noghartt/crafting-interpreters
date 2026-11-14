@@ -83,10 +83,10 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
-        let mut expr = self.ternary()?;
+        let mut expr = self.assignment()?;
         while self.match_tokens(&[TokenType::Comma]) {
             let operator = self.previous().clone();
-            let right = self.ternary()?;
+            let right = self.assignment()?;
             expr = Expr::BinaryExpr {
                 left: Box::new(expr),
                 operator,
@@ -109,6 +109,24 @@ impl Parser {
                 else_branch: Box::new(right),
             }
         };
+
+        Ok(expr)
+    }
+
+    fn assignment(&mut self) -> Result<Expr, Error> {
+        let expr = self.ternary()?;
+        if self.match_tokens(&[TokenType::Equal]) {
+            let equals = self.previous().clone();
+            let value = self.assignment()?;
+            if let Expr::Variable { identifier } = expr {
+                return Ok(Expr::Assign {
+                    identifier,
+                    value: Box::new(value),
+                });
+            } else {
+                return Err(self.error(&equals, "Invalid assignment target."));
+            }
+        }
 
         Ok(expr)
     }

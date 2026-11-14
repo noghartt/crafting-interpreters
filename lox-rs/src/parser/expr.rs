@@ -40,6 +40,7 @@ syntax!(
     Grouping -> expression: Expr;
     Literal -> value: LiteralValue;
     Variable -> identifier: Token;
+    Assign -> identifier: Token, value: Expr;
 );
 
 #[derive(Debug)]
@@ -73,6 +74,9 @@ impl std::fmt::Display for Expr {
             Self::Grouping { expression } => write!(f, "(group {expression})"),
             Self::Literal { value } => write!(f, "{value}"),
             Self::Variable { identifier } => write!(f, "{}", identifier.token),
+            Self::Assign { identifier, value } => {
+                write!(f, "(assign {} {value})", identifier.token)
+            }
         }
     }
 }

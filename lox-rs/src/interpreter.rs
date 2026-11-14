@@ -53,7 +53,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn eval(&self, expr: Expr) -> Result<Value, Error> {
+    fn eval(&mut self, expr: Expr) -> Result<Value, Error> {
         match expr {
             Expr::Grouping { expression } => self.eval(*expression),
             Expr::BinaryExpr {
@@ -69,11 +69,16 @@ impl Interpreter {
             Expr::UnaryExpr { operator, right } => self.eval_unary_expr(operator, *right),
             Expr::Literal { value } => self.eval_literal(value),
             Expr::Variable { identifier } => self.environment.get(&identifier),
+            Expr::Assign { identifier, value } => {
+                let value = self.eval(*value)?;
+                self.environment.assign(&identifier, value.clone())?;
+                Ok(value)
+            }
         }
     }
 
     fn eval_conditional(
-        &self,
+        &mut self,
         condition: Expr,
         then_branch: Expr,
         else_branch: Expr,
@@ -86,7 +91,12 @@ impl Interpreter {
         }
     }
 
-    fn eval_binary_expr(&self, left: Expr, operator: Token, right: Expr) -> Result<Value, Error> {
+    fn eval_binary_expr(
+        &mut self,
+        left: Expr,
+        operator: Token,
+        right: Expr,
+    ) -> Result<Value, Error> {
         let left = self.eval(left)?;
         let right = self.eval(right)?;
 
@@ -130,7 +140,7 @@ impl Interpreter {
         }
     }
 
-    fn eval_unary_expr(&self, operator: Token, right: Expr) -> Result<Value, Error> {
+    fn eval_unary_expr(&mut self, operator: Token, right: Expr) -> Result<Value, Error> {
         let right = self.eval(right)?;
         match (&operator.token, right) {
             (TokenType::Bang, value) => Ok(Value::Bool(!value.is_truthy())),
