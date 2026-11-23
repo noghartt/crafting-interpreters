@@ -58,6 +58,11 @@ pub enum Statement {
     Print {
         expression: Expr,
     },
+    If {
+        expression: Expr,
+        then_branch: Box<Statement>,
+        else_branch: Option<Box<Statement>>,
+    },
 }
 
 impl std::fmt::Display for Expr {
