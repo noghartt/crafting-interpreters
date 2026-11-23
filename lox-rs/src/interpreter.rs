@@ -118,6 +118,25 @@ impl Interpreter {
                     .assign(&identifier, value.clone())?;
                 Ok(value)
             }
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => {
+                let left = self.eval(*left)?;
+
+                if matches!(operator.token, TokenType::Or) {
+                    if left.is_truthy() {
+                        return Ok(left);
+                    };
+                } else {
+                    if !left.is_truthy() {
+                        return Ok(left);
+                    }
+                }
+
+                Ok(self.eval(*right)?)
+            }
         }
     }
 
